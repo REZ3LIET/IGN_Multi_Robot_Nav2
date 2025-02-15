@@ -11,12 +11,9 @@ from launch_ros.actions import Node, PushRosNamespace
 TURTLEBOT3_MODEL = os.environ['TURTLEBOT3_MODEL']   # waffle
 
 def generate_launch_description():
-    namespace = "tb1"
+    namespace = "/tb1"
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     world_name = LaunchConfiguration('world_name', default='turtlebot3_world')
-
-    launch_file_dir = os.path.join(get_package_share_directory('turtlebot3'), 'launch')
-    new_file_dir = os.path.join(get_package_share_directory('multi_robot_navigation'), 'launch')
 
     ign_resource_path = SetEnvironmentVariable(
         name='IGN_GAZEBO_RESOURCE_PATH',value=[
@@ -116,34 +113,70 @@ def generate_launch_description():
     )
 
     # Nav2 Bringup
-    map_dir = LaunchConfiguration(
+    yaml_filename = LaunchConfiguration(
         'map',
         default=os.path.join(
-            get_package_share_directory('turtlebot3'),
+            get_package_share_directory('nav2_bringup'),
             'maps',
             'turtlebot3_world.yaml'))
 
-    param_file_name = TURTLEBOT3_MODEL + '.yaml'
-    param_dir = LaunchConfiguration(
+    map_server = Node(package='nav2_map_server',
+        executable='map_server',
+        name='map_server',
+        output='screen',
+        parameters=[
+            {
+                'yaml_filename': yaml_filename,
+            }
+        ]
+    )
+
+    map_server_lifecyle = Node(package='nav2_lifecycle_manager',
+            executable='lifecycle_manager',
+            name='lifecycle_manager_map_server',
+            output='screen',
+            parameters=[{'use_sim_time': use_sim_time},
+                        {'autostart': True},
+                        {'node_names': ['map_server']}])
+
+    params_file = LaunchConfiguration(
         'params_file',
         default=os.path.join(
-            get_package_share_directory('turtlebot3'),
+            get_package_share_directory('multi_robot_navigation'),
             'params',
-            param_file_name))
-    nav2_launch_file_dir = os.path.join(get_package_share_directory('nav2_bringup'), 'launch')
+            'nav2_params.yaml'))
+
+    nav2_launch_file_dir = os.path.join(get_package_share_directory('multi_robot_navigation'), 'launch')
     nav2_bringup = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(nav2_launch_file_dir, 'bringup_launch.py')),
+        PythonLaunchDescriptionSource(os.path.join(nav2_launch_file_dir, 'nav2_mod/bringup_launch.py')),
         launch_arguments={
-            'namespace': namespace,
             'slam': 'False',
-            'map': map_dir,
+            'namespace': namespace,
+            'use_namespace': 'True',
+            'map': '',
+            'map_server': 'False',
+            'params_file': params_file,
+            'default_bt_xml_filename': os.path.join(
+                get_package_share_directory('nav2_bt_navigator'),
+                'behavior_trees', 'navigate_w_replanning_and_recovery.xml'),
+            'autostart': 'true',
             'use_sim_time': use_sim_time,
-            'params_file': param_dir,
-            'autostart': 'True',
-            'use_composition': 'True',
-            'use_respawn': 'False',
+            'log_level': 'warn'
         }.items(),
     )
+
+    rviz_config_file = os.path.join(get_package_share_directory("nav2_bringup"), 'rviz', 'nav2_default_view.rviz')
+    rviz_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(nav2_launch_file_dir, 'nav2_mod/rviz_launch.py')),
+            launch_arguments={
+                'use_sim_time': use_sim_time, 
+                'namespace': namespace,
+                'use_namespace': 'True',
+                'rviz_config': rviz_config_file,
+                'log_level': 'warn'
+            }.items()
+        )
 
     return LaunchDescription([
         ign_resource_path,
@@ -168,6 +201,10 @@ def generate_launch_description():
             description='World name'),
 
         robot_state_publisher,
+        # PushRosNamespace(namespace),
+        map_server,
+        map_server_lifecyle,
         nav2_bringup,
         bridge,
+        rviz_cmd
     ])
