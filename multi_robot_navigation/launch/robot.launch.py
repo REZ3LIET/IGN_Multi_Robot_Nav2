@@ -153,17 +153,24 @@ def generate_launch_description():
             'slam': 'False',
             'namespace': namespace,
             'use_namespace': 'True',
-            'map': '',
-            'map_server': 'False',
+            'map': yaml_filename,
+            'map_server': 'True',
             'params_file': params_file,
             'default_bt_xml_filename': os.path.join(
                 get_package_share_directory('nav2_bt_navigator'),
                 'behavior_trees', 'navigate_w_replanning_and_recovery.xml'),
             'autostart': 'true',
             'use_sim_time': use_sim_time,
-            'log_level': 'warn'
+            # 'log_level': 'warn'
         }.items(),
     )
+
+    static_transform_publisher = Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            output="screen" ,
+            arguments=["0", "0", "0", "0", "0", "0", "map", "odom"]
+        )
 
     rviz_config_file = os.path.join(get_package_share_directory("nav2_bringup"), 'rviz', 'nav2_default_view.rviz')
     rviz_cmd = IncludeLaunchDescription(
@@ -202,9 +209,10 @@ def generate_launch_description():
 
         robot_state_publisher,
         # PushRosNamespace(namespace),
-        map_server,
-        map_server_lifecyle,
+        # map_server,
+        # map_server_lifecyle,
         nav2_bringup,
         bridge,
+        static_transform_publisher,
         rviz_cmd
     ])
